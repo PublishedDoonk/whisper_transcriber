@@ -38,8 +38,16 @@ def get_new_audio(processed: list):
     
     allowed_filetypes = ('flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm')
     
+    new_audio = []
+    for f in os.listdir('audio'):
+        if os.path.isfile(os.path.join('audio', f)) and f.endswith(allowed_filetypes):
+            if get_md5('audio/' + f) not in processed:
+                processed.append(get_md5('audio/' + f))
+                new_audio.append(f)
+    
     # Returns a list of audio files that have not been processed
-    return [f for f in os.listdir('audio') if os.path.isfile(os.path.join('audio', f)) and f not in processed and f.endswith(allowed_filetypes)]
+    return new_audio
+    #return [f for f in os.listdir('audio') if os.path.isfile(os.path.join('audio', f)) and get_md5(f) not in processed and f.endswith(allowed_filetypes)]
 
 def process_audio(audio_files: list):
     '''Transcribe and process audio files'''
@@ -67,6 +75,10 @@ def process_audio(audio_files: list):
             row = create_row(audio_files[i], transcript)
             transcripts.writerow(row)
 
+def get_md5(filepath: str):
+    '''Returns the MD5 hash of a file'''
+    return hashlib.md5(open(filepath, 'rb').read()).hexdigest()
+
 def create_row(audio_file: str, transcript: str):
     '''Creates a row for the transcripts.csv file'''
     filepath = os.path.join('audio', audio_file)
@@ -74,8 +86,7 @@ def create_row(audio_file: str, transcript: str):
     ctime = os.path.getctime(filepath)
     atime = os.path.getatime(filepath)
     mtime = os.path.getmtime(filepath)
-    bytes = open(filepath, 'rb').read()
-    md5 = hashlib.md5(bytes).hexdigest()
+    md5 = get_md5(filepath)
     filetype = os.path.splitext(audio_file)[1][1:].upper()
     return [audio_file, filetype, md5, filepath, filesize, ctime, atime, mtime, transcript]
     
@@ -109,9 +120,11 @@ def record_processed(audio_files: list):
     if not audio_files:
         return
     
+    hashes = [get_md5('audio/' + f) for f in audio_files]
+    
     # Appends newly processed audio files to processed.txt
     with open('processed_files/processed.txt', 'a') as f:
-        f.write('\n'.join(audio_files) + '\n')
+        f.write('\n'.join(hashes) + '\n')
      
 def main():
     '''Transcribes all new audio files in the audio folder'''
@@ -120,7 +133,12 @@ def main():
     processed = get_processed() # Gets list of processed audio files
     new_audio = get_new_audio(processed) # get unprocessed audio files
     
-    # Transcribes all new audio files if any
+    # Exits if no new audio files
+    if len(new_audio) == 0:
+        print('No new audio files to transcribe! Exiting...')
+        return
+    
+    # Transcribes all new audio files
     print('Transcribing', len(new_audio), 'new audio files...')
     process_audio(new_audio)
     print('Finished Transcription!')
